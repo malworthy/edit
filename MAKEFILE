@@ -1,0 +1,9 @@
+edit.exe: edit.obj edmenu.obj routines.obj
+	c:\tc\tcc -Lc:\tc\lib -ml bin\edit.obj bin\edmenu.obj bin\routines.obj graphics.lib
+
+edit.obj: edit.c
+	c:\tc\tcc -c -ml -nbin -Ic:\tc\include -Lc:\tc\lib edit 
+edmenu.obj: edmenu.c
+	c:\tc\tcc -c -ml -nbin -Ic:\tc\include -Lc:\tc\lib edmenu
+routines.obj: routines.c
+	c:\tc\tcc -c -ml -nbin -Ic:\tc\include -Lc:\tc\lib routines 
