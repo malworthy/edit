@@ -19,9 +19,12 @@
 #define TOP_PAGE 1
 
 char *text;
+char *currentPosition; /* pointer to the current position under the cursor */
 char *startPointer;
 char *startBlock;
 char *endBlock;
+char *loadedFilename;
+
 void editor();
 void printChar(char ch);
 void cursOff();
@@ -44,21 +47,31 @@ void printChar(char ch)
 	int86(0x10,&r,&r);
 }
 
-main(int argc,char *argv[])
+int main(int argc,char *argv[])
 {
+	loadedFilename = "a.txt";
+
 	if(!(text=(char *)malloc(10000*MAX_WIDTH)))
 	{
 		printf("Not enough memory");
 		exit(1);
 	}
+	*text = EOF_CHAR;
 	startPointer=text;
-	load(argv[1]);
+	if (argc > 1)
+	{
+		load(argv[1]);
+		loadedFilename = argv[1];
+	}
+		
 	textbackground(BLACK);
 	textcolor(LIGHTGRAY);
 	clrscr();
 	printScreen(1,1);
 	editor();
 	free(startPointer);
+	clrscr();
+	return 0;
 }
 
 displayFooter()
@@ -82,7 +95,7 @@ void editor()
 	int row=1;
 	int col=1;
 	int theLastCol;
-	char dontExit=true;
+	char exit=false;
 	char reachedEnd=false;
 	char charUnderCurs;
 	int lastLine;
@@ -90,7 +103,8 @@ void editor()
 
 	header();
 	displayFooter();
-	while(dontExit)
+	currentPosition = text;
+	while(!exit)
 	{
 		printAscii(row,col,scroll_Y);
 		gotoxy(x,y+TOP_PAGE);
@@ -107,12 +121,11 @@ void editor()
 			case 11: endBlock=addressUnderCursor(row-scroll_Y+1,col);
 					 printScreen(scroll_X);
 					 break;
-			case 27: dontExit=0;
-
+			case 27: exit=true;
 					 break;
 			case 0:  break;
 			case '\b' : if(row==1 && col==1) break;
-						--x;
+						x = moveLeft(x);
 						theLastCol=lastCol(y-1);
             			backSpace(y,col);
 						if(x<1)
@@ -130,7 +143,7 @@ void editor()
 						x=1;
 					 }
 					 else
-						x++;
+						x = moveRight(x);
 		}
 	/* **** Process Control keys ***** */
 
@@ -182,11 +195,12 @@ void editor()
 					  printScreen(scroll_X);
 					  break;
 			/* ********* LEFT ARROW ******* */
-			case 75: x--; /* left */
+			case 75: x = moveLeft(x); /* left */
 					 break;
 			/* *********** RIGHT ARROW ************ */
-			case 77: charUnderCurs=charUnderCursor(row-scroll_Y+1,col);
-					 if(charUnderCurs!=EOF_CHAR) x++; /* right */
+			case 77: charUnderCurs = *currentPosition; /* charUnderCursor(row-scroll_Y+1,col);*/
+					 if(charUnderCurs!=EOF_CHAR) 
+					 	x = moveRight(x); /* right */
 					 if(charUnderCurs=='\n')
 					 {
 						 y++;
@@ -197,6 +211,7 @@ void editor()
 					 break;
 			/* *********** UP ARROW *********** */
 			case 72: y--; /* up */
+					 x = moveUp(row, col);
 					 break;
 			/* ************ DOWN ARROW ************* */
 			case 80: if(charUnderCursor(row-scroll_Y+1,lastCol(y))!=EOF_CHAR) y++; /* down */
@@ -217,21 +232,22 @@ void editor()
 							}
 							break;
 			}
-			processMenu(menuopt);
+			exit = processMenu(menuopt);
 			menuopt[0]=0;
 			ch=0;
 		}
 		/* ********* END OF PROCESSING THE PULL DOWN MENU *********** */
 
-		theLastCol=lastCol(y);
-		if(x+scroll_X>theLastCol)
+		theLastCol = lastCol(y);
+		if(x + scroll_X > theLastCol)
 		{
-			if(theLastCol<scroll_X) scroll_X=theLastCol-1;
-			x=theLastCol-scroll_X+1;
+			if (theLastCol < scroll_X) scroll_X = theLastCol - 1;
+			x = theLastCol-scroll_X+1;
 			printScreen(scroll_X);
 		}
 		if(x<1) /* scroll page to left */
 		{
+			currentPosition--;
 			x=1;
 			scroll_X--;
 			if(scroll_X<1)
@@ -284,36 +300,103 @@ void editor()
 		row=scroll_Y+y-1;
 	}
 }
-processMenu(char *menuopt)
+
+int moveUp(int row, int col)
+{
+	int startCol = col;
+	
+	if (row <= 1) return col;
+
+	while(col > 1)
+	{
+		col = moveLeft(col);
+	}
+	col = lastCol(row - 1);
+	currentPosition--;
+	while(col > startCol)
+	{
+		col = moveLeft(col);
+	}
+
+	return col;
+}
+
+int moveRight(int x)
+{
+	char ch;
+
+	ch = *currentPosition;
+	currentPosition++;
+	if (ch == '\t')
+		return x + 8;
+	return x + 1;
+}
+
+int moveLeft(int x)
+{
+	char ch;
+
+	if(x <= 1)
+		return 0;
+
+	ch = *(--currentPosition);
+
+	if (ch == '\t')
+		return x - 8;
+	return x - 1;
+}
+
+int processMenu(char *menuopt)
 {
 	switch(menuopt[0])
 	{
-		case 'M' : processMiscMenu(menuopt[1]);
-				   break;
+		case 'M' : return processMiscMenu(menuopt[1]);
+		case 'F' : return processFileMenu(menuopt[1]);
 	}
+
+	return false;
 }
-processMiscMenu(char choice)
+
+int processMiscMenu(char choice)
 {
 	switch(choice)
 	{
 		case 'W' : wordCount();
 	}
+
+	return false;
+}
+
+int processFileMenu(char choice)
+{
+	switch(choice)
+	{
+		case 'E' : return true;
+		case 'X' : save(loadedFilename);
+				   return true;
+	}
+
+	return false;
 }
 
 void printAscii(int row,int col,int scroll_Y)
 {
 	char ch;
-
+	int screenX;
 	textcolor(YELLOW);
 	textbackground(RED);
     gotoxy(5,25);
-	cprintf("Row %d    Col %d   ",row,col);
+	screenX = getScreenCol(row, col);
+	cprintf("Row %d    Col %d %d  ",row,col, *currentPosition);
 	gotoxy(50,25);
 	ch=charUnderCursor(row-scroll_Y+1,col);
-	cprintf("ASCII: %d  %d  ",ch,lastCol(row-scroll_Y+1));
+	
+	cprintf("ASCII: %d  Line Length: %d  ",ch,lastCol(row-scroll_Y+1));
 	textcolor(LIGHTGRAY);
 	textbackground(BLACK);
 }
+
+
 int lastCol(int row)
 {
 	int rowCount=1;
@@ -329,11 +412,41 @@ int lastCol(int row)
 	}
 	while(*tempPointer!='\n' && *tempPointer!=EOF_CHAR)
 	{
+		if (*tempPointer=='\t')
+			col += 8;
+		else
+			col++;
+
 		tempPointer++;
-		col++;
 	}
 	return col;
 }
+
+int getScreenCol(int row, int col)
+{
+	int rowCount=1;
+	char *tempPointer;
+	int i;
+	int screenCol = 1;
+
+	tempPointer=text;
+
+	while(rowCount<row)
+	{
+		if(*tempPointer=='\n') ++rowCount;
+		++tempPointer;
+	}
+	for(i=0; i<=col; i++)
+	{
+		if(*tempPointer=='\t')
+			screenCol += 7; /* need much more complex code here to work out tabs, but it's a start */
+		else if(*tempPointer!='\r')
+			screenCol++;
+	}
+
+	return screenCol;
+}
+
 char charUnderCursor(int row, int col)
 {
 	int rowCount=1;
@@ -349,6 +462,7 @@ char charUnderCursor(int row, int col)
 	tempPointer+=col;
 	return *tempPointer;
 }
+
 char *addressUnderCursor(int row, int col)
 {
 	int rowCount=1;
@@ -364,6 +478,7 @@ char *addressUnderCursor(int row, int col)
 	tempPointer+=col;
 	return tempPointer;
 }
+
 insertChar(int row, int col, char ch)
 {
 	int rowCount=1;
@@ -391,6 +506,7 @@ insertChar(int row, int col, char ch)
 	}
 	*tempPointer=lastChar;
 }
+
 backSpace(int row, int col)
 {
 	int rowCount=1;
@@ -472,7 +588,6 @@ int printScreen(int startCol)
 	int col=1;
 	int screenLine=1;
 	char temp;
-	char lineText[MAX_WIDTH];
 	char *startPointer;
 	int i;
 	int lastLine=0;
@@ -480,7 +595,7 @@ int printScreen(int startCol)
 	gotoxy(1,1+TOP_PAGE);
 	startPointer=text;
 	cursOff();
-	while(screenLine<=PAGE_LENGTH)
+	while(screenLine<=PAGE_LENGTH && *text != EOF_CHAR)
 	{
 		if(*text!='\n')
 		{
@@ -494,11 +609,11 @@ int printScreen(int startCol)
 				textcolor(LIGHTGRAY);
 				textbackground(BLACK);
 			}
-			if(*text!=-1)
+			if(*text != EOF_CHAR)
 			{
 				if(col>=startCol && col<SCREEN_COLS+startCol) printChar(*text);
 			}
-			else
+			else /* should be dead code */
 			{
 				lastLine=screenLine;
 				while(screenLine<=PAGE_LENGTH)
@@ -508,7 +623,7 @@ int printScreen(int startCol)
 					++screenLine;
 				}
 				break;
-			}
+			} /* end of dead code */
 		}
 		else
 		{
@@ -520,6 +635,17 @@ int printScreen(int startCol)
 		text++;
 		col++;
 	}
+	
+	if(*text == EOF_CHAR)
+	{
+		lastLine=screenLine;
+		while(screenLine<=PAGE_LENGTH-1)
+		{
+			gotoxy(1,++screenLine + 1 + TOP_PAGE);
+			clreol();
+		}
+	}
+
 	cursOn();
 	text=startPointer;
 	return lastLine;
@@ -529,30 +655,45 @@ int load(char *filename)
 {
 	FILE *fp;
 	int counter=1;
-	char string[MAX_WIDTH];
+	/*char string[MAX_WIDTH];*/
 	char *startText;
-
+	*text=EOF_CHAR;
 	startText=text;
-	if(!(fp=fopen(filename,"r")))
+	if(!(fp=fopen(filename,"a+")))
 	{
 		printf("Cannot open file\n");
 		exit(1);
 	}
 	while(!feof(fp))
 	{
-		/*fgets(string,MAX_WIDTH,fp);
-		strcpy(&text,string);
-		printf(&text);
-		text+=strlen(string);
-		printf(&text);*/
 		*text=(char)getc(fp);
-		/*putch(*text);*/
 		++text;
 	}
+	fclose(fp);
 	text=startText;
-	printf(&text);
+	/*printf(&text);*/
 	return counter;
 }
+
+int save(char *filename)
+{
+	FILE *fp;
+	char *pointer;
+
+	if(!(fp=fopen(filename,"w")))
+	{
+		printf("Cannot open file\n");
+		return false;
+	}
+	
+
+	pointer = startPointer;
+	while(*pointer != EOF_CHAR)
+		putc(*pointer++, fp);
+	/*fprintf(fp, startPointer);*/
+	fclose(fp);
+}
+
 int gotoLine(int currentLine)
 {
 	void *mem;
@@ -611,8 +752,6 @@ wordCount()
 	cprintf(" Number of sentences: %d",numSentence);
 	gotoxy(5,6);
 	cprintf("     Number of lines: %d",numLines);
-/*	gotoxy(5,7);
-	cprintf("Number of Paragraphs: %d",numPara);*/
 	gotoxy(5,7);
 	cprintf(" Average Word length: %3.1f",(float)numLetters/numWords);
 	cursOff();
@@ -620,4 +759,3 @@ wordCount()
 	cursOn();
 	closeWindow(20,8,60,16,mem);
 }
-
