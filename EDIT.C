@@ -25,6 +25,8 @@ char *startBlock;
 char *endBlock;
 char *loadedFilename;
 
+
+
 void editor();
 void printChar(char ch);
 void cursOff();
@@ -88,18 +90,18 @@ void editor()
 {
 	char ch;
 	char ctrlKey;
+	int theLastCol;
+	char exit=false;
+	char charUnderCurs;
+	int lastLine;
+	char menuopt[2];
+
 	int x=1; /* x position of cursor on screen */
 	int y=1; /* y position of cursor on screen */
 	int scroll_X=1;
 	int scroll_Y=1;
 	int row=1;
 	int col=1;
-	int theLastCol;
-	char exit=false;
-	char reachedEnd=false;
-	char charUnderCurs;
-	int lastLine;
-	char menuopt[2];
 
 	header();
 	displayFooter();
@@ -215,6 +217,7 @@ void editor()
 					 break;
 			/* ************ DOWN ARROW ************* */
 			case 80: if(charUnderCursor(row-scroll_Y+1,lastCol(y))!=EOF_CHAR) y++; /* down */
+					 x = moveDown(row, col);
 					 break;
 		}
 		/* ********** PROCESS THE PULL DOWN MENU ********** */
@@ -290,7 +293,6 @@ void editor()
 		}
 		if(y<1)
 		{
-			reachedEnd=false;
 			y=1;
 			scroll_Y--;
 			if(scroll_Y<1) scroll_Y=1; else scroll(-1);
@@ -316,6 +318,40 @@ int moveUp(int row, int col)
 	while(col > startCol)
 	{
 		col = moveLeft(col);
+	}
+
+	return col;
+}
+
+int onLastLine()
+{
+	char *pointer = currentPosition;
+
+	while(*pointer != EOF_CHAR)
+	{
+		if (*pointer == '\n')
+			return false;
+		pointer++;
+	}
+
+	return true;
+}
+
+int moveDown(int row, int col)
+{
+	int startCol = col;
+	if (onLastLine())
+		return col;
+	
+	while(*currentPosition != '\n')
+	{
+		col = moveRight(col);
+	}
+	col = 1;
+	currentPosition++;
+	while(col < startCol && *currentPosition != '\n')
+	{
+		col = moveRight(col);
 	}
 
 	return col;
